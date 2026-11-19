@@ -1,52 +1,69 @@
-// A plain checklist of the 55 trophies: tick one off and it stays ticked (localStorage); export and import the ticks.
-const KEY = 'gta6-trophy-checklist';
-const rows = document.getElementById('rows');
-const grade = document.getElementById('grade');
-let earned = new Set(JSON.parse(localStorage.getItem(KEY) ?? '[]'));
-const doc = await (await fetch('data/trophies.json')).json();
+// Bootstrap: load the trophy data and the roadmap, then wire the tracker together.
+import { loadEarned, saveEarned, renderProgress, wireExportImport } from './trophy-progress.js';
+import { createFilterState, trophyMatchesFilters, wireFilterControls, renderFilterSummary } from './trophy-filters.js';
+import { renderTrophyList } from './trophy-list.js';
+import { renderTrophyDetail } from './trophy-detail.js';
+import { renderRoadmap } from './trophy-roadmap.js';
 
-function save() {
-  localStorage.setItem(KEY, JSON.stringify([...earned]));
+const trophiesDoc = await (await fetch('data/trophies.json')).json();
+const roadmapDoc = await (await fetch('data/roadmap.json')).json();
+const trophies = trophiesDoc.trophies;
+const trophiesByName = new Map(trophies.map((t) => [t.name, t]));
+const trophiesById = new Map(trophies.map((t) => [t.id, t]));
+const knownNames = new Set(trophies.map((t) => t.name));
+
+const state = createFilterState();
+let earned = loadEarned();
+let selectedName = null;
+
+const listEl = document.getElementById('trophy-list');
+const detailEl = document.getElementById('detail');
+
+function renderAll() {
+  const visible = trophies.filter((t) => trophyMatchesFilters(t, state));
+  const shown = renderTrophyList(listEl, visible, state, earned, selectedName, onToggleEarned, onSelectTrophy);
+  renderFilterSummary(shown, trophies.length, state);
+  renderTrophyDetail(detailEl, selectedName ? trophiesByName.get(selectedName) : null, earned, onToggleEarned);
+  renderProgress(earned, trophies);
+  renderRoadmap(document.getElementById('roadmap-stages'), roadmapDoc, trophiesById, earned, onSelectTrophy);
 }
 
-function render() {
-  rows.replaceChildren();
-  for (const t of doc.trophies) {
-    if (grade.value !== 'all' && t.grade !== grade.value) continue;
-    const tr = document.createElement('tr');
-    const box = document.createElement('input');
-    box.type = 'checkbox';
-    box.checked = earned.has(t.name);
-    box.addEventListener('change', () => {
-      if (box.checked) earned.add(t.name);
-      else earned.delete(t.name);
-      save();
-      render();
-    });
-    const cells = [box, `${t.name}\n${t.description}`, t.grade, t.guide];
-    for (const c of cells) {
-      const td = document.createElement('td');
-      if (typeof c === 'string') td.textContent = c;
-      else td.append(c);
-      tr.append(td);
-    }
-    rows.append(tr);
-  }
-  document.getElementById('progress').textContent = `${earned.size} of ${doc.trophies.length} earned`;
+function onToggleEarned(name, value) {
+  if (value) earned.add(name);
+  else earned.delete(name);
+  saveEarned(earned);
+  renderAll();
 }
 
-document.getElementById('export').addEventListener('click', () => {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([JSON.stringify([...earned])], { type: 'application/json' }));
-  a.download = 'trophy-progress.json';
-  a.click();
-});
-document.getElementById('import').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  earned = new Set(JSON.parse(await file.text()));
-  save();
-  render();
-});
-grade.addEventListener('change', render);
-render();
+function onSelectTrophy(name) {
+  selectedName = name;
+  showView('checklist');
+  renderAll();
+  const card = [...listEl.children].find((el) => el.querySelector('.trophy-name').textContent === name || el.querySelector('.trophy-name').textContent === 'Hidden story trophy');
+  if (card) card.scrollIntoView({ block: 'nearest' });
+}
+
+function showView(which) {
+  const checklistView = document.getElementById('view-checklist');
+  const roadmapView = document.getElementById('view-roadmap');
+  const checklistTab = document.getElementById('tab-checklist');
+  const roadmapTab = document.getElementById('tab-roadmap');
+  const showRoadmap = which === 'roadmap';
+  checklistView.hidden = showRoadmap;
+  roadmapView.hidden = !showRoadmap;
+  checklistTab.classList.toggle('active', !showRoadmap);
+  roadmapTab.classList.toggle('active', showRoadmap);
+}
+
+document.getElementById('tab-checklist').addEventListener('click', () => showView('checklist'));
+document.getElementById('tab-roadmap').addEventListener('click', () => showView('roadmap'));
+document.getElementById('roadmap-title').textContent = roadmapDoc.title;
+document.getElementById('roadmap-intro').textContent = roadmapDoc.intro;
+
+wireFilterControls(state, renderAll);
+wireExportImport(
+  () => earned,
+  (next) => { earned = next; saveEarned(earned); renderAll(); },
+  knownNames,
+);
+renderAll();
