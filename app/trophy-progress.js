@@ -1,78 +1,52 @@
-// Progress storage, export/import and the progress bar for the trophy tracker.
-export const STORAGE_KEY = 'gta6-trophy-checklist';
+// Progress math and progress-bar rendering for the Leonida Trophy Guide.
+// This file knows nothing about the DOM except the three progress elements
+// it is handed; the tracker owns the rest of the page.
 
-export function loadEarned() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return new Set();
-    const names = JSON.parse(raw);
-    return new Set(Array.isArray(names) ? names : []);
-  } catch {
-    return new Set();
+const GRADE_ORDER = ['platinum', 'gold', 'silver', 'bronze'];
+
+export function gradeLabel(grade) {
+  return grade.charAt(0).toUpperCase() + grade.slice(1);
+}
+
+export function countEarnedByGrade(trophies, earnedNames) {
+  const earned = new Set(earnedNames);
+  const counts = {};
+  for (const grade of GRADE_ORDER) {
+    counts[grade] = { earned: 0, total: 0 };
   }
-}
-
-export function saveEarned(earned) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([...earned]));
-}
-
-export function renderProgress(earned, trophies) {
-  const total = trophies.length;
-  const done = earned.size;
-  const pct = total === 0 ? 0 : Math.round((done / total) * 100);
-  const fill = document.getElementById('progress-fill');
-  const text = document.getElementById('progress-text');
-  const counts = document.getElementById('grade-counts');
-  if (fill) fill.style.width = `${pct}%`;
-  if (text) text.textContent = `${done} of ${total} earned · ${pct}%`;
-  if (counts) {
-    const byGrade = {};
-    for (const t of trophies) {
-      const got = earned.has(t.name) ? 1 : 0;
-      byGrade[t.grade] = byGrade[t.grade] || { got: 0, total: 0 };
-      byGrade[t.grade].got += got;
-      byGrade[t.grade].total += 1;
-    }
-    counts.textContent = ['platinum', 'gold', 'silver', 'bronze']
-      .filter((g) => byGrade[g])
-      .map((g) => `${g}: ${byGrade[g].got}/${byGrade[g].total}`)
-      .join(' · ');
+  for (const trophy of trophies) {
+    const slot = counts[trophy.grade];
+    if (!slot) continue;
+    slot.total += 1;
+    if (earned.has(trophy.name)) slot.earned += 1;
   }
+  return counts;
 }
 
-export function exportProgress(earned) {
-  const blob = new Blob([JSON.stringify({ exported_at: new Date().toISOString(), earned: [...earned] }, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'gta6-trophy-progress.json';
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-export async function importProgressFile(file, knownNames) {
-  const parsed = JSON.parse(await file.text());
-  const names = Array.isArray(parsed) ? parsed : parsed.earned;
-  if (!Array.isArray(names)) throw new Error('That file does not hold a trophy list.');
-  const kept = names.filter((n) => knownNames.has(n));
-  return new Set(kept);
-}
-
-export function wireExportImport(getEarned, setEarned, knownNames) {
-  const exportButton = document.getElementById('export');
-  if (exportButton) exportButton.addEventListener('click', () => exportProgress(getEarned()));
-  const importInput = document.getElementById('import');
-  if (importInput) {
-    importInput.addEventListener('change', async (event) => {
-      const file = event.target.files && event.target.files[0];
-      if (!file) return;
-      try {
-        const next = await importProgressFile(file, knownNames);
-        setEarned(next);
-      } catch (error) {
-        alert(`Could not import that file: ${error.message}`);
-      }
-      event.target.value = '';
-    });
+export function progressPercent(trophies, earnedNames) {
+  if (!trophies.length) return 0;
+  const earned = new Set(earnedNames);
+  let done = 0;
+  for (const trophy of trophies) {
+    if (earned.has(trophy.name)) done += 1;
   }
+  const percent = Math.round((done / trophies.length) * 100);
+  return Math.min(100, Math.max(0, percent));
+}
+
+export function renderProgressBar(trophies, earnedNames, elements) {
+  const { text, fill, gradeCounts } = elements;
+  const earned = new Set(earnedNames);
+  let done = 0;
+  for (const trophy of trophies) {
+    if (earned.has(trophy.name)) done += 1;
+  }
+  const percent = progressPercent(trophies, earnedNames);
+  text.textContent = `${done} of ${trophies.length} earned — ${percent}%`;
+  fill.style.width = `${percent}%`;
+  const byGrade = countEarnedByGrade(trophies, earnedNames);
+  const parts = GRADE_ORDER.map(
+    (grade) => `${gradeLabel(grade)} ${byGrade[grade].earned}/${byGrade[grade].total}`,
+  );
+  gradeCounts.textContent = parts.join(' · ');
 }
