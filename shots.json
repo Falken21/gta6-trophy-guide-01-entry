@@ -1,1 +1,5 @@
-[{"file":"1-checklist-guide.jpg","view":"Tracker tab: checklist with the Cunning Stunts guide open beside it, progress bar, filters and export/import visible","viewport":{"height":800,"width":1280}},{"file":"2-roadmap.jpg","view":"Roadmap to Platinum tab: six stages in order with missable trophies flagged","viewport":{"height":800,"width":1280}},{"file":"3-spoiler-missable.jpg","view":"Tracker tab with spoiler mode on and the missable filter active: story trophies hidden until earned","viewport":{"height":800,"width":1280}},{"file":"4-missable-detail.jpg","view":"Detail panel for the missable trophy Actions Speak Louder with its guide, steps, sources and the export/import controls","viewport":{"height":800,"width":1280}}]
+[
+  { "file": "1-checklist.jpg", "path": "/", "viewport": { "width": 1280, "height": 800 } },
+  { "file": "2-silver.jpg", "path": "/", "grade": "silver", "viewport": { "width": 1280, "height": 800 } },
+  { "file": "3-bronze.jpg", "path": "/", "grade": "bronze", "scroll": 1400, "viewport": { "width": 1280, "height": 800 } }
+]
